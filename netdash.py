@@ -11,9 +11,12 @@ import json
 import time
 import uuid
 import socket
+import platform
 import subprocess
 import threading
 import ipaddress
+
+IS_MACOS = platform.system() == "Darwin"
 from dataclasses import dataclass, asdict, field
 from typing import Dict, List, Any, Optional
 from collections import deque
@@ -25,7 +28,7 @@ from flask_socketio import SocketIO, emit, join_room, leave_room
 from flask_cors import CORS
 import psutil
 
-__version__ = "1.0.0"
+__version__ = "1.0.2"
 
 # ==============================================================================
 # CONFIGURATION
@@ -56,20 +59,46 @@ ALLOWED_COMMANDS = {
     "dig":          {"cmd": "dig",        "args": ["+noall", "+answer"],          "needs_target": True,  "timeout": 10},
     "reverse_dns":  {"cmd": "dig",        "args": ["-x"],                        "needs_target": True,  "timeout": 10},
     "whois":        {"cmd": "whois",      "args": [],                            "needs_target": True,  "timeout": 15},
-    "ss":           {"cmd": "ss",         "args": ["-tuln"],                     "needs_target": False, "timeout": 5},
-    "ss_all":       {"cmd": "ss",         "args": ["-tunap"],                    "needs_target": False, "timeout": 5},
-    "ip_addr":      {"cmd": "ip",         "args": ["-j", "addr", "show"],        "needs_target": False, "timeout": 5},
-    "ip_route":     {"cmd": "ip",         "args": ["-j", "route", "show"],       "needs_target": False, "timeout": 5},
-    "ip_neigh":     {"cmd": "ip",         "args": ["-j", "neigh", "show"],       "needs_target": False, "timeout": 5},
-    "df":           {"cmd": "df",         "args": ["-h"],                        "needs_target": False, "timeout": 5},
-    "free":         {"cmd": "free",       "args": ["-h"],                        "needs_target": False, "timeout": 5},
-    "uptime":       {"cmd": "uptime",     "args": [],                            "needs_target": False, "timeout": 5},
-    "who":          {"cmd": "who",        "args": [],                            "needs_target": False, "timeout": 5},
-    "ps_cpu":       {"cmd": "ps",         "args": ["aux", "--sort=-%cpu"],       "needs_target": False, "timeout": 5},
-    "ps_mem":       {"cmd": "ps",         "args": ["aux", "--sort=-%mem"],       "needs_target": False, "timeout": 5},
-    "systemctl_failed": {"cmd": "systemctl", "args": ["--failed"],              "needs_target": False, "timeout": 10},
-    "journalctl":   {"cmd": "journalctl", "args": ["-n", "50", "--no-pager"],    "needs_target": False, "timeout": 10},
-    "dmesg":        {"cmd": "dmesg",      "args": ["-T", "--level=err,warn", "-x", "--no-pager"], "needs_target": False, "timeout": 10},
+    # Socket / connection listing
+    "ss":       {"cmd": "netstat" if IS_MACOS else "ss",
+                 "args": ["-an", "-p", "tcp"] if IS_MACOS else ["-tuln"],
+                 "needs_target": False, "timeout": 5},
+    "ss_all":   {"cmd": "lsof"    if IS_MACOS else "ss",
+                 "args": ["-i", "-n", "-P"]   if IS_MACOS else ["-tunap"],
+                 "needs_target": False, "timeout": 5},
+    # Interface / routing info
+    "ip_addr":  {"cmd": "ifconfig" if IS_MACOS else "ip",
+                 "args": []                    if IS_MACOS else ["-j", "addr", "show"],
+                 "needs_target": False, "timeout": 5},
+    "ip_route": {"cmd": "netstat" if IS_MACOS else "ip",
+                 "args": ["-rn"]               if IS_MACOS else ["-j", "route", "show"],
+                 "needs_target": False, "timeout": 5},
+    "ip_neigh": {"cmd": "arp"     if IS_MACOS else "ip",
+                 "args": ["-an"]               if IS_MACOS else ["-j", "neigh", "show"],
+                 "needs_target": False, "timeout": 5},
+    # Disk / memory
+    "df":       {"cmd": "df",     "args": ["-h"],                                "needs_target": False, "timeout": 5},
+    "free":     {"cmd": "vm_stat" if IS_MACOS else "free",
+                 "args": []                    if IS_MACOS else ["-h"],
+                 "needs_target": False, "timeout": 5},
+    # General
+    "uptime":   {"cmd": "uptime", "args": [],                                    "needs_target": False, "timeout": 5},
+    "who":      {"cmd": "who",    "args": [],                                    "needs_target": False, "timeout": 5},
+    "ps_cpu":   {"cmd": "ps",     "args": ["aux", "-r"]         if IS_MACOS else ["aux", "--sort=-%cpu"], "needs_target": False, "timeout": 5},
+    "ps_mem":   {"cmd": "ps",     "args": ["aux", "-m"]         if IS_MACOS else ["aux", "--sort=-%mem"], "needs_target": False, "timeout": 5},
+    # System logs / services
+    "systemctl_failed": {
+        "cmd":  "launchctl"  if IS_MACOS else "systemctl",
+        "args": ["list"]     if IS_MACOS else ["--failed"],
+        "needs_target": False, "timeout": 10},
+    "journalctl": {
+        "cmd":  "log"        if IS_MACOS else "journalctl",
+        "args": ["show", "--last", "1h", "--style", "syslog"] if IS_MACOS else ["-n", "50", "--no-pager"],
+        "needs_target": False, "timeout": 15},
+    "dmesg": {
+        "cmd":  "dmesg",
+        "args": []           if IS_MACOS else ["-T", "--level=err,warn", "-x", "--no-pager"],
+        "needs_target": False, "timeout": 10},
 }
 
 # ==============================================================================
@@ -247,9 +276,11 @@ class ProcessCollector(MetricsCollector):
 
     def collect(self) -> Dict[str, Any]:
         procs = []
+        now = time.time()
         for p in psutil.process_iter(["pid", "name", "cpu_percent", "memory_percent",
-                                       "memory_info", "status", "username"]):
+                                       "memory_info", "status", "username", "create_time"]):
             try:
+                ct = p.info.get("create_time") or now
                 procs.append({
                     "pid": p.info["pid"],
                     "name": p.info["name"],
@@ -258,6 +289,7 @@ class ProcessCollector(MetricsCollector):
                     "mem_rss": p.info["memory_info"].rss if p.info["memory_info"] else 0,
                     "status": p.info["status"],
                     "user": p.info["username"],
+                    "age_secs": int(now - ct),
                 })
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 pass
@@ -724,6 +756,230 @@ def api_dns():
         return jsonify({"error": "Invalid target"}), 400
     res = _run_command_sync(query_type, target)
     return jsonify({"target": target, **res})
+
+
+# ==============================================================================
+# TOPOLOGY EXPLORER API
+# ==============================================================================
+
+def _get_local_subnets():
+    subnets = []
+    if_addrs = psutil.net_if_addrs()
+    if_stats = psutil.net_if_stats()
+    gateway = None
+    try:
+        if IS_MACOS:
+            r = subprocess.run(["route", "-n", "get", "default"], capture_output=True, text=True, timeout=5)
+            for line in r.stdout.splitlines():
+                if "gateway:" in line:
+                    gateway = line.split("gateway:")[-1].strip()
+                    break
+        else:
+            r = subprocess.run(["ip", "-j", "route", "show"], capture_output=True, text=True, timeout=5)
+            if r.returncode == 0:
+                for route in json.loads(r.stdout or "[]"):
+                    if route.get("dst") == "default":
+                        gateway = route.get("gateway")
+                        break
+    except Exception:
+        pass
+    for iface, addrs in if_addrs.items():
+        stats = if_stats.get(iface)
+        if not stats or not stats.isup:
+            continue
+        for addr in addrs:
+            if addr.family != socket.AF_INET:
+                continue
+            if addr.address.startswith("127."):
+                continue
+            try:
+                net = ipaddress.ip_interface(f"{addr.address}/{addr.netmask}").network
+                subnets.append({
+                    "interface": iface,
+                    "ip": addr.address,
+                    "netmask": addr.netmask,
+                    "subnet": str(net),
+                    "gateway": gateway,
+                    "prefix_len": net.prefixlen,
+                    "host_count": net.num_addresses - 2,
+                })
+            except Exception:
+                pass
+    return subnets
+
+
+def _parse_nmap_hosts(output: str) -> list:
+    hosts = []
+    current: dict = {}
+    for line in output.splitlines():
+        m = re.match(r'Nmap scan report for (.+)', line)
+        if m:
+            if current.get("ip"):
+                hosts.append(current)
+            raw = m.group(1).strip()
+            hm = re.match(r'^(.+?)\s+\((\d+\.\d+\.\d+\.\d+)\)$', raw)
+            if hm:
+                current = {"hostname": hm.group(1), "ip": hm.group(2), "mac": "", "vendor": "", "status": "up"}
+            else:
+                current = {"hostname": "", "ip": raw, "mac": "", "vendor": "", "status": "up"}
+        elif "Host is up" in line and current:
+            current["status"] = "up"
+        elif "Host is down" in line and current:
+            current["status"] = "down"
+        elif line.startswith("MAC Address:") and current:
+            mm = re.match(r'MAC Address: ([0-9A-Fa-f:]+)\s*(?:\((.+?)\))?', line)
+            if mm:
+                current["mac"] = mm.group(1)
+                current["vendor"] = mm.group(2) or ""
+    if current.get("ip"):
+        hosts.append(current)
+    return hosts
+
+
+def _parse_nmap_ports(output: str) -> list:
+    ports = []
+    for line in output.splitlines():
+        m = re.match(r'(\d+)/(tcp|udp)\s+(open|filtered)\s+(\S+)(?:\s+(.+))?', line)
+        if m:
+            ports.append({
+                "port": int(m.group(1)),
+                "proto": m.group(2),
+                "state": m.group(3),
+                "service": m.group(4),
+                "version": (m.group(5) or "").strip(),
+            })
+    return ports
+
+
+def _topo_sweep_job(jid: str, subnet: str):
+    update_job(jid, status="running", progress=10, message=f"Sweeping {subnet}...")
+    try:
+        r = subprocess.run(["nmap", "-sn", "-T4", subnet], capture_output=True, text=True, timeout=60)
+        hosts = _parse_nmap_hosts(r.stdout)
+        update_job(jid, status="completed", progress=100,
+                   message=f"Found {len(hosts)} host(s)",
+                   result={"hosts": hosts, "output": r.stdout})
+    except subprocess.TimeoutExpired:
+        update_job(jid, status="error", progress=0, message="Sweep timed out")
+    except FileNotFoundError:
+        # nmap not installed — fall back to ARP cache
+        try:
+            if IS_MACOS:
+                r2 = subprocess.run(["arp", "-an"], capture_output=True, text=True, timeout=5)
+                hosts = _parse_arp_an(r2.stdout)
+            else:
+                r2 = subprocess.run(["ip", "-j", "neigh", "show"], capture_output=True, text=True, timeout=5)
+                neighbors = json.loads(r2.stdout or "[]")
+                hosts = []
+                for n in neighbors:
+                    state = n.get("state", [])
+                    if isinstance(state, list): state = state[0] if state else ""
+                    if str(state).upper() in ("REACHABLE", "STALE", "DELAY", "PROBE", "PERMANENT"):
+                        hosts.append({"ip": n.get("dst", ""), "hostname": "", "mac": n.get("lladdr", ""), "vendor": "", "status": "up"})
+            update_job(jid, status="completed", progress=100,
+                       message=f"Found {len(hosts)} host(s) (ARP cache only — install nmap for full sweep)",
+                       result={"hosts": hosts, "output": "ARP cache fallback — nmap not installed"})
+        except Exception as exc:
+            update_job(jid, status="error", message=str(exc))
+    except Exception as exc:
+        update_job(jid, status="error", message=str(exc))
+
+
+def _topo_portscan_job(jid: str, host: str, mode: str):
+    args_map = {
+        "fast":    ["nmap", "-F", "-T4", "--open", host],
+        "full":    ["nmap", "-p", "1-1000", "-T4", "--open", host],
+        "service": ["nmap", "-sV", "-F", "-T4", "--open", host],
+    }
+    args = args_map.get(mode, args_map["fast"])
+    update_job(jid, status="running", progress=10, message=f"Scanning {host} ({mode} mode)...")
+    try:
+        r = subprocess.run(args, capture_output=True, text=True, timeout=120)
+        ports = _parse_nmap_ports(r.stdout)
+        update_job(jid, status="completed", progress=100,
+                   message=f"Found {len(ports)} open port(s)",
+                   result={"ports": ports, "host": host, "output": r.stdout})
+    except subprocess.TimeoutExpired:
+        update_job(jid, status="error", progress=0, message="Scan timed out")
+    except FileNotFoundError:
+        update_job(jid, status="error", message="nmap not found — install with: sudo apt install nmap")
+    except Exception as exc:
+        update_job(jid, status="error", message=str(exc))
+
+
+@app.route("/api/topology/subnets")
+def api_topo_subnets():
+    try:
+        hostname = socket.gethostname()
+        addrs = []
+        for a in socket.getaddrinfo(hostname, None):
+            if a[0] == socket.AF_INET:
+                addrs.append(a[4][0])
+        subnets = _get_local_subnets()
+        return jsonify({"hostname": hostname, "addresses": list(set(addrs)), "subnets": subnets})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+def _parse_arp_an(output: str) -> list:
+    """Parse `arp -an` output (macOS/BSD format) into host list."""
+    hosts = []
+    for line in output.splitlines():
+        # ? (192.168.1.1) at aa:bb:cc:dd:ee:ff on en0 ifscope [ethernet]
+        m = re.match(r'\S+\s+\((\d+\.\d+\.\d+\.\d+)\)\s+at\s+([0-9a-fA-F:]+)\s+on\s+(\S+)', line)
+        if m and m.group(2).lower() not in ("(incomplete)", "ff:ff:ff:ff:ff:ff"):
+            hosts.append({"ip": m.group(1), "mac": m.group(2), "dev": m.group(3),
+                          "state": "reachable", "hostname": "", "vendor": ""})
+    return hosts
+
+
+@app.route("/api/topology/arp")
+def api_topo_arp():
+    try:
+        if IS_MACOS:
+            r = subprocess.run(["arp", "-an"], capture_output=True, text=True, timeout=5)
+            hosts = _parse_arp_an(r.stdout)
+        else:
+            r = subprocess.run(["ip", "-j", "neigh", "show"], capture_output=True, text=True, timeout=5)
+            neighbors = json.loads(r.stdout or "[]")
+            hosts = []
+            for n in neighbors:
+                state = n.get("state", [])
+                if isinstance(state, list): state = state[0] if state else ""
+                if str(state).upper() in ("REACHABLE", "STALE", "DELAY", "PROBE", "PERMANENT"):
+                    hosts.append({"ip": n.get("dst", ""), "mac": n.get("lladdr", ""),
+                                  "dev": n.get("dev", ""), "state": str(state).lower(),
+                                  "hostname": "", "vendor": ""})
+        return jsonify(hosts)
+    except Exception:
+        return jsonify([])
+
+
+@app.route("/api/topology/sweep", methods=["POST"])
+def api_topo_sweep():
+    data = request.get_json() or {}
+    subnet = data.get("subnet", "")
+    try:
+        ipaddress.ip_network(subnet, strict=False)
+    except ValueError:
+        return jsonify({"error": "Invalid subnet"}), 400
+    job = new_job("topo_sweep", subnet)
+    executor.submit(_topo_sweep_job, job["id"], subnet)
+    return jsonify({"job_id": job["id"]}), 202
+
+
+@app.route("/api/topology/portscan", methods=["POST"])
+def api_topo_portscan():
+    data = request.get_json() or {}
+    host = data.get("host", "")
+    mode = data.get("mode", "fast")
+    if not validate_target(host):
+        return jsonify({"error": "Invalid host"}), 400
+    if mode not in ("fast", "full", "service"):
+        mode = "fast"
+    job = new_job("topo_portscan", host)
+    executor.submit(_topo_portscan_job, job["id"], host, mode)
+    return jsonify({"job_id": job["id"]}), 202
 
 
 # ==============================================================================

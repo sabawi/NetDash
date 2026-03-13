@@ -17,5 +17,9 @@ if [ -f "$PID_FILE" ]; then
     rm -f "$PID_FILE"
 else
     echo "No PID file found. Trying port 8123..."
-    fuser -k 8123/tcp 2>/dev/null && echo "Killed." || echo "Nothing on port 8123."
+    if command -v fuser &>/dev/null; then
+        fuser -k 8123/tcp 2>/dev/null && echo "Killed." || echo "Nothing on port 8123."
+    elif command -v lsof &>/dev/null; then
+        lsof -ti:8123 | xargs kill -9 2>/dev/null && echo "Killed." || echo "Nothing on port 8123."
+    fi
 fi

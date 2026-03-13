@@ -155,8 +155,8 @@
         /* Gauges */
         .gauges-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:1.25rem; margin-bottom:1.5rem; }
         .gauge-wrap { display:flex; flex-direction:column; align-items:center; padding:.75rem; }
-        .gauge-svg-wrap { position:relative; width:180px; height:105px; }
-        .gauge-svg { width:100%; height:100%; overflow:visible; }
+        .gauge-svg-wrap { position:relative; width:180px; height:115px; }
+        .gauge-svg { width:100%; height:100%; display:block; }
         .gauge-value { position:absolute; bottom:2px; left:50%; transform:translateX(-50%); font-size:1.75rem; font-weight:700; color:var(--accent-primary); white-space:nowrap; }
         .gauge-label { font-size:.8rem; color:var(--text-secondary); margin-top:.35rem; }
 
@@ -256,10 +256,50 @@
         .tab-pane { display:none; }
         .tab-pane.active { display:block; }
 
-        /* Topology placeholder */
-        .topology-area { background:var(--bg-primary); border-radius:.625rem; height:500px; display:flex; align-items:center; justify-content:center; color:var(--text-secondary); flex-direction:column; gap:1rem; border:2px dashed var(--border-color); }
-        .topology-node { display:inline-flex; flex-direction:column; align-items:center; gap:.4rem; padding:.75rem 1rem; background:var(--bg-card); border-radius:.5rem; border:1px solid var(--border-color); font-size:.8rem; margin:.25rem; }
-        .topology-nodes { display:flex; flex-wrap:wrap; gap:.5rem; justify-content:center; padding:1.5rem; }
+        /* Topology Explorer */
+        .topo-host-banner { display:flex; align-items:center; gap:1rem; padding:1rem 1.25rem; background:linear-gradient(90deg,rgba(0,212,255,.08),rgba(124,58,237,.08)); border-radius:.75rem; border:1px solid var(--border-color); margin-bottom:1.25rem; }
+        .topo-host-name { font-size:1.2rem; font-weight:700; }
+        .topo-host-ips { display:flex; flex-wrap:wrap; gap:.4rem; margin-top:.35rem; }
+        .topo-ip-chip { font-size:.78rem; background:var(--bg-hover); padding:.15rem .55rem; border-radius:1rem; color:var(--accent-primary); font-family:monospace; }
+        .topo-section-label { font-size:.72rem; text-transform:uppercase; letter-spacing:.09em; color:var(--text-secondary); margin:1.25rem 0 .65rem; font-weight:600; }
+        .topo-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(270px,1fr)); gap:1rem; }
+        .topo-card { background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:.75rem; padding:1rem 1.1rem; cursor:pointer; transition:all .2s; position:relative; overflow:hidden; }
+        .topo-card::after { content:''; position:absolute; inset:0; background:linear-gradient(135deg,rgba(0,212,255,.0),rgba(0,212,255,.0)); transition:background .2s; pointer-events:none; }
+        .topo-card:hover { border-color:var(--accent-primary); transform:translateY(-2px); box-shadow:0 6px 24px rgba(0,212,255,.12); }
+        .topo-card-icon { font-size:1.6rem; margin-bottom:.5rem; }
+        .topo-card-title { font-size:.98rem; font-weight:600; margin-bottom:.2rem; }
+        .topo-card-sub { font-size:.8rem; color:var(--text-secondary); font-family:monospace; }
+        .topo-card-chips { display:flex; flex-wrap:wrap; gap:.35rem; margin-top:.75rem; }
+        .topo-chip { font-size:.7rem; padding:.15rem .5rem; border-radius:1rem; background:var(--bg-hover); color:var(--text-secondary); }
+        .topo-chip.accent { background:rgba(0,212,255,.12); color:var(--accent-primary); }
+        .topo-chip.success { background:rgba(16,185,129,.12); color:var(--accent-success); }
+        .topo-chip.warn { background:rgba(245,158,11,.12); color:var(--accent-warning); }
+        .topo-card-arrow { position:absolute; right:.875rem; top:50%; transform:translateY(-50%); color:var(--accent-primary); opacity:0; transition:opacity .2s; font-size:.9rem; }
+        .topo-card:hover .topo-card-arrow { opacity:1; }
+        .topo-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:.35rem; vertical-align:middle; }
+        .topo-dot.up { background:var(--accent-success); box-shadow:0 0 5px var(--accent-success); }
+        .topo-dot.down { background:var(--accent-danger); }
+        .topo-dot.stale { background:var(--accent-warning); }
+        .topo-dot.unknown { background:var(--text-secondary); }
+        .topo-scan-bar { display:flex; align-items:center; gap:.65rem; padding:.7rem .9rem; background:var(--bg-secondary); border-radius:.5rem; margin-bottom:1rem; flex-wrap:wrap; border:1px solid var(--border-color); }
+        .topo-scan-status { flex:1; font-size:.82rem; color:var(--text-secondary); min-width:120px; }
+        .topo-section-hdr { display:flex; align-items:center; gap:.75rem; padding:.75rem 1rem; background:var(--bg-secondary); border-radius:.5rem; margin-bottom:1rem; border:1px solid var(--border-color); }
+        .topo-section-hdr-detail { font-size:.8rem; color:var(--text-secondary); }
+        .topo-breadcrumb { display:flex; align-items:center; gap:.35rem; font-size:.8rem; margin-top:.35rem; flex-wrap:wrap; }
+        .topo-crumb { color:var(--text-secondary); cursor:pointer; padding:.1rem .3rem; border-radius:.25rem; transition:all .2s; }
+        .topo-crumb:hover { color:var(--accent-primary); background:rgba(0,212,255,.08); }
+        .topo-crumb.active { color:var(--text-primary); cursor:default; font-weight:500; }
+        .topo-crumb-sep { color:var(--border-color); user-select:none; }
+        .topo-ports-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:.75rem; }
+        .port-card { background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:.5rem; padding:.75rem; }
+        .port-card-num { font-size:1.05rem; font-weight:700; color:var(--accent-primary); font-family:monospace; }
+        .port-card-svc { font-size:.85rem; font-weight:600; margin:.25rem 0 .15rem; }
+        .port-card-ver { font-size:.73rem; color:var(--text-secondary); font-family:monospace; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .port-proto-tag { font-size:.62rem; padding:.1rem .35rem; border-radius:.25rem; background:rgba(0,212,255,.15); color:var(--accent-primary); text-transform:uppercase; margin-left:.4rem; }
+        .topo-raw-output { margin-top:1rem; font-family:monospace; font-size:.76rem; background:var(--bg-primary); padding:.875rem; border-radius:.5rem; white-space:pre-wrap; max-height:280px; overflow-y:auto; color:var(--text-secondary); border:1px solid var(--border-color); }
+        .topo-empty { grid-column:1/-1; text-align:center; padding:2.5rem 1rem; color:var(--text-secondary); }
+        .topo-empty i { display:block; font-size:2rem; margin-bottom:.65rem; opacity:.35; }
+        .btn-sm { padding:.35rem .7rem; font-size:.8rem; }
 
         /* Alerts */
         .alert-item { display:flex; align-items:flex-start; gap:.875rem; padding:.875rem; border-radius:.625rem; margin-bottom:.75rem; }
@@ -611,10 +651,10 @@
                             <thead>
                                 <tr>
                                     <th>PID</th><th>Name</th><th>User</th>
-                                    <th>CPU %</th><th>Mem %</th><th>Status</th>
+                                    <th>CPU %</th><th>Mem %</th><th>Age</th><th>Status</th>
                                 </tr>
                             </thead>
-                            <tbody id="proc-tbody"><tr><td colspan="6" class="text-muted">Loading...</td></tr></tbody>
+                            <tbody id="proc-tbody"><tr><td colspan="7" class="text-muted">Loading...</td></tr></tbody>
                         </table>
                     </div>
                 </div>
@@ -789,18 +829,74 @@
         <!-- ===== TOPOLOGY ===== -->
         <div id="view-topology" class="view-section">
             <div class="page-header">
-                <div><h2>Network Topology</h2></div>
-                <div class="header-actions">
-                    <button class="btn btn-secondary" onclick="buildTopology()"><i class="fas fa-sync-alt"></i> Refresh</button>
-                </div>
-            </div>
-            <div class="card">
-                <div class="card-header"><div class="card-title"><i class="fas fa-project-diagram"></i> Local Network</div></div>
-                <div class="card-body">
-                    <div class="topology-nodes" id="topology-container">
-                        <div class="text-muted">Click Refresh to discover local network nodes</div>
+                <div>
+                    <h2>Network Topology</h2>
+                    <div class="topo-breadcrumb" id="topo-breadcrumb">
+                        <span class="topo-crumb active" onclick="topoGoLevel(0)"><i class="fas fa-home"></i> Network</span>
                     </div>
                 </div>
+                <div class="header-actions">
+                    <button class="btn btn-secondary" onclick="topoRefreshCurrent()"><i class="fas fa-sync-alt"></i> Refresh</button>
+                </div>
+            </div>
+
+            <!-- Level 0: This host + subnets -->
+            <div id="topo-l0">
+                <div class="topo-host-banner">
+                    <i class="fas fa-server" style="font-size:1.75rem;color:var(--accent-primary);flex-shrink:0;"></i>
+                    <div>
+                        <div class="topo-host-name" id="topo-hostname">—</div>
+                        <div class="topo-host-ips" id="topo-host-ips"></div>
+                    </div>
+                </div>
+                <div class="topo-section-label">Local Subnets — click to explore</div>
+                <div class="topo-grid" id="topo-subnets-grid">
+                    <div class="text-muted"><i class="fas fa-spinner spin"></i> Loading interfaces...</div>
+                </div>
+            </div>
+
+            <!-- Level 1: Devices in subnet -->
+            <div id="topo-l1" style="display:none;">
+                <div class="topo-section-hdr" id="topo-subnet-hdr">
+                    <i class="fas fa-network-wired" style="color:var(--accent-primary);font-size:1.2rem;"></i>
+                    <div>
+                        <div style="font-weight:600;" id="topo-subnet-title">Subnet</div>
+                        <div class="topo-section-hdr-detail" id="topo-subnet-detail"></div>
+                    </div>
+                </div>
+                <div class="topo-scan-bar">
+                    <div class="topo-scan-status" id="topo-sweep-status">Click "Sweep" to discover hosts via nmap ping scan</div>
+                    <button class="btn btn-secondary btn-sm" onclick="topoSweepSubnet()"><i class="fas fa-radar"></i> Sweep Subnet</button>
+                </div>
+                <div class="topo-section-label" id="topo-devices-label">Known Devices (ARP cache)</div>
+                <div class="topo-grid" id="topo-devices-grid">
+                    <div class="topo-empty"><i class="fas fa-search"></i>No devices found yet</div>
+                </div>
+            </div>
+
+            <!-- Level 2: Ports on device -->
+            <div id="topo-l2" style="display:none;">
+                <div class="topo-section-hdr" id="topo-device-hdr">
+                    <i class="fas fa-desktop" style="color:var(--accent-secondary);font-size:1.2rem;"></i>
+                    <div>
+                        <div style="font-weight:600;" id="topo-device-title">Device</div>
+                        <div class="topo-section-hdr-detail" id="topo-device-detail"></div>
+                    </div>
+                </div>
+                <div class="topo-scan-bar">
+                    <div class="topo-scan-status" id="topo-scan-status">Choose a scan mode</div>
+                    <button class="btn btn-secondary btn-sm" onclick="topoPortScan('fast')"><i class="fas fa-bolt"></i> Fast (top 100)</button>
+                    <button class="btn btn-secondary btn-sm" onclick="topoPortScan('full')"><i class="fas fa-list-ol"></i> Full (1–1000)</button>
+                    <button class="btn btn-primary btn-sm" onclick="topoPortScan('service')"><i class="fas fa-microscope"></i> Service Scan</button>
+                </div>
+                <div class="topo-section-label">Open Ports</div>
+                <div class="topo-ports-grid" id="topo-ports-grid">
+                    <div class="topo-empty"><i class="fas fa-plug"></i>Run a scan to discover open ports</div>
+                </div>
+                <details style="margin-top:1rem;">
+                    <summary style="cursor:pointer;font-size:.8rem;color:var(--text-secondary);">Raw nmap output</summary>
+                    <div class="topo-raw-output" id="topo-ports-raw"></div>
+                </details>
             </div>
         </div>
 
@@ -1183,8 +1279,7 @@ function updateGauge(pathId, valId, value, max, label, color) {
     const startX = cx - r, startY = cy;
     const endX = cx + r * Math.cos(Math.PI - angle);
     const endY = cy - r * Math.sin(Math.PI - angle);
-    const large = angle > Math.PI / 2 ? 1 : 0;
-    path.setAttribute('d', `M${startX} ${startY} A${r} ${r} 0 ${large} 1 ${endX} ${endY}`);
+    path.setAttribute('d', `M${startX} ${startY} A${r} ${r} 0 0 1 ${endX} ${endY}`);
     path.setAttribute('stroke', color);
     valEl.textContent = label;
 }
@@ -1265,6 +1360,16 @@ async function fetchSystemMetrics() {
 // ============================================================
 // PROCESSES
 // ============================================================
+function fmtAge(secs) {
+    if (secs < 60)   return secs + 's';
+    if (secs < 3600) return Math.floor(secs / 60) + 'm';
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    if (h < 24)      return h + 'h ' + m + 'm';
+    const d = Math.floor(h / 24);
+    return d + 'd ' + (h % 24) + 'h';
+}
+
 async function fetchProcesses() {
     if (activeView !== 'processes' && activeView !== 'overview') return;
     try {
@@ -1282,6 +1387,7 @@ async function fetchProcesses() {
                 <td class="text-muted">${escHtml(p.user || '?')}</td>
                 <td><span class="${p.cpu_pct > 50 ? 'text-danger' : p.cpu_pct > 20 ? 'text-warning' : ''}">${p.cpu_pct.toFixed(1)}%</span></td>
                 <td>${p.mem_pct.toFixed(1)}%</td>
+                <td class="text-muted" title="${p.age_secs}s">${fmtAge(p.age_secs ?? 0)}</td>
                 <td><span class="badge ${p.status === 'running' ? 'badge-success' : 'badge-info'}">${p.status}</span></td>
             </tr>`).join('');
     } catch(e) {}
@@ -1532,31 +1638,264 @@ async function checkPendingJobs() {
 }
 
 // ============================================================
-// TOPOLOGY
+// TOPOLOGY EXPLORER
 // ============================================================
-async function buildTopology() {
-    const container = document.getElementById('topology-container');
-    container.innerHTML = '<div class="text-muted"><i class="fas fa-spinner spin"></i> Discovering local hosts...</div>';
+const topoState = { level: 0, subnet: null, host: null, hostInfo: {}, sweepJobId: null, scanJobId: null };
+// Lookup maps so onclick can pass a safe integer index instead of raw JSON
+let _topoSubnetMap = [];
+let _topoDeviceMap = [];
+
+function topoGoLevel(n) {
+    ['topo-l0','topo-l1','topo-l2'].forEach((id, i) => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = (i === n) ? '' : 'none';
+    });
+    topoState.level = n;
+    topoUpdateBreadcrumb();
+}
+
+function topoUpdateBreadcrumb() {
+    const bc = document.getElementById('topo-breadcrumb');
+    if (!bc) return;
+    let html = `<span class="topo-crumb${topoState.level===0?' active':''}" onclick="topoGoLevel(0)"><i class="fas fa-home"></i> Network</span>`;
+    if (topoState.level >= 1 && topoState.subnet) {
+        html += `<span class="topo-crumb-sep">›</span>`;
+        html += `<span class="topo-crumb${topoState.level===1?' active':''}" onclick="topoGoLevel(1)">${topoState.subnet}</span>`;
+    }
+    if (topoState.level >= 2 && topoState.host) {
+        html += `<span class="topo-crumb-sep">›</span>`;
+        const label = topoState.hostInfo.hostname || topoState.host;
+        html += `<span class="topo-crumb active">${label} (${topoState.host})</span>`;
+    }
+    bc.innerHTML = html;
+}
+
+function topoRefreshCurrent() {
+    if (topoState.level === 0) topoLoadSubnets();
+    else if (topoState.level === 1) topoLoadArpCache();
+    else if (topoState.level === 2) { /* user re-clicks scan */ }
+}
+
+async function topoLoadSubnets() {
+    setEl('topo-hostname', '…');
+    document.getElementById('topo-subnets-grid').innerHTML = '<div class="text-muted"><i class="fas fa-spinner spin"></i> Loading...</div>';
     try {
-        const res = await fetch(API + '/api/system/interfaces');
-        const ifaces = await res.json();
-        const nodes = [];
-        nodes.push({name: 'This Host', icon: 'fa-server', color: 'var(--accent-primary)'});
-        for (const iface of ifaces) {
-            if (iface.is_up && iface.ipv4 && !iface.name.startsWith('lo')) {
-                nodes.push({name: iface.ipv4, icon: 'fa-network-wired', sub: iface.name, color: 'var(--accent-success)'});
-            }
+        const res = await fetch(API + '/api/topology/subnets');
+        const d = await res.json();
+        setEl('topo-hostname', d.hostname || '—');
+        const ipsEl = document.getElementById('topo-host-ips');
+        if (ipsEl) ipsEl.innerHTML = (d.addresses || []).map(ip => `<span class="topo-ip-chip">${escHtml(ip)}</span>`).join('');
+        const grid = document.getElementById('topo-subnets-grid');
+        if (!d.subnets || !d.subnets.length) {
+            grid.innerHTML = '<div class="topo-empty"><i class="fas fa-unlink"></i>No active interfaces found</div>';
+            return;
         }
-        container.innerHTML = nodes.map(n => `
-            <div class="topology-node">
-                <i class="fas ${n.icon}" style="font-size:1.5rem;color:${n.color}"></i>
-                <span style="font-weight:600;">${escHtml(n.name)}</span>
-                ${n.sub ? `<span class="text-muted">${escHtml(n.sub)}</span>` : ''}
+        _topoSubnetMap = d.subnets;
+        grid.innerHTML = d.subnets.map((s, i) => `
+            <div class="topo-card" id="topo-sn-${i}" onclick="topoSelectSubnet(${i})">
+                <div class="topo-card-icon"><i class="fas fa-sitemap" style="color:var(--accent-primary);"></i></div>
+                <div class="topo-card-title">${escHtml(s.subnet)}</div>
+                <div class="topo-card-sub">${escHtml(s.interface)} — ${escHtml(s.ip)}</div>
+                <div class="topo-card-chips">
+                    <span class="topo-chip accent">/${s.prefix_len}</span>
+                    <span class="topo-chip">${s.host_count} hosts</span>
+                    ${s.gateway ? `<span class="topo-chip success">GW ${escHtml(s.gateway)}</span>` : ''}
+                </div>
+                <i class="fas fa-chevron-right topo-card-arrow"></i>
             </div>`).join('');
     } catch(e) {
-        container.innerHTML = '<div class="text-muted">Failed to load topology</div>';
+        document.getElementById('topo-subnets-grid').innerHTML = '<div class="topo-empty"><i class="fas fa-exclamation-triangle"></i>Failed to load interfaces</div>';
     }
 }
+
+function topoSelectSubnet(idx) {
+    const s = _topoSubnetMap[idx];
+    if (!s) return;
+    // Flash the clicked card
+    const card = document.getElementById('topo-sn-' + idx);
+    if (card) { card.style.borderColor = 'var(--accent-primary)'; card.style.background = 'rgba(0,212,255,.08)'; }
+    topoState.subnet = s.subnet;
+    topoState.subnetInfo = s;
+    setEl('topo-subnet-title', s.subnet);
+    setEl('topo-subnet-detail', `Interface: ${s.interface}  •  This host: ${s.ip}${s.gateway ? '  •  Gateway: ' + s.gateway : ''}`);
+    setEl('topo-sweep-status', 'Click "Sweep Subnet" to discover hosts via nmap, or browse ARP cache below');
+    document.getElementById('topo-devices-grid').innerHTML = '<div class="topo-empty"><i class="fas fa-spinner spin"></i> Loading ARP cache...</div>';
+    const label = document.getElementById('topo-devices-label');
+    if (label) label.textContent = 'Known Devices (ARP cache)';
+    topoGoLevel(1);
+    topoLoadArpCache();
+}
+
+async function topoLoadArpCache() {
+    const grid = document.getElementById('topo-devices-grid');
+    const label = document.getElementById('topo-devices-label');
+    grid.innerHTML = '<div class="topo-empty"><i class="fas fa-spinner spin"></i> Loading ARP cache...</div>';
+    try {
+        const res = await fetch(API + '/api/topology/arp');
+        const all = await res.json();
+        // filter to current subnet
+        let hosts = all;
+        if (topoState.subnetInfo) {
+            try {
+                hosts = all.filter(h => {
+                    if (!h.ip) return false;
+                    try {
+                        const net = topoState.subnetInfo.subnet;
+                        const [netAddr, prefix] = net.split('/');
+                        const mask = ~(0xFFFFFFFF >>> parseInt(prefix));
+                        const ipToInt = ip => ip.split('.').reduce((acc,o)=>(acc<<8)|parseInt(o),0)>>>0;
+                        return (ipToInt(h.ip) & mask) >>> 0 === (ipToInt(netAddr) & mask) >>> 0;
+                    } catch { return true; }
+                });
+            } catch { hosts = all; }
+        }
+        if (label) label.textContent = `Known Devices (${hosts.length} in ARP cache)`;
+        topoRenderDevices(grid, hosts);
+    } catch(e) {
+        grid.innerHTML = '<div class="topo-empty"><i class="fas fa-exclamation-triangle"></i>Failed to load ARP cache</div>';
+    }
+}
+
+function topoRenderDevices(grid, hosts) {
+    if (!hosts || !hosts.length) {
+        grid.innerHTML = '<div class="topo-empty"><i class="fas fa-search"></i>No devices in ARP cache for this subnet.<br><small>Click "Sweep Subnet" to discover hosts.</small></div>';
+        return;
+    }
+    _topoDeviceMap = hosts;
+    const stateColor = {reachable:'up', stale:'stale', delay:'stale', probe:'stale', permanent:'up'};
+    grid.innerHTML = hosts.map((h, i) => {
+        const dotClass = stateColor[h.state] || 'unknown';
+        const label = h.hostname ? escHtml(h.hostname) : escHtml(h.ip);
+        const sub = h.hostname ? escHtml(h.ip) : (h.mac || '—');
+        return `<div class="topo-card" id="topo-dev-${i}" onclick="topoSelectDevice(${i})">
+            <div class="topo-card-icon"><i class="fas fa-desktop" style="color:var(--accent-secondary);"></i></div>
+            <div class="topo-card-title"><span class="topo-dot ${dotClass}"></span>${label}</div>
+            <div class="topo-card-sub">${sub}</div>
+            <div class="topo-card-chips">
+                ${h.vendor ? `<span class="topo-chip">${escHtml(h.vendor)}</span>` : ''}
+                ${h.mac ? `<span class="topo-chip accent">${escHtml(h.mac)}</span>` : ''}
+                <span class="topo-chip ${dotClass==='up'?'success':''}">${h.state||'unknown'}</span>
+            </div>
+            <i class="fas fa-chevron-right topo-card-arrow"></i>
+        </div>`;
+    }).join('');
+}
+
+async function topoSweepSubnet() {
+    if (!topoState.subnet) return;
+    const statusEl = document.getElementById('topo-sweep-status');
+    const label = document.getElementById('topo-devices-label');
+    const grid = document.getElementById('topo-devices-grid');
+    if (statusEl) statusEl.innerHTML = '<i class="fas fa-spinner spin"></i> Launching nmap sweep...';
+    try {
+        const res = await fetch(API + '/api/topology/sweep', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({subnet: topoState.subnet})
+        });
+        const d = await res.json();
+        if (!d.job_id) { statusEl.textContent = 'Failed to start sweep'; return; }
+        grid.innerHTML = '<div class="topo-empty"><i class="fas fa-spinner spin"></i> Sweeping subnet — this may take up to 60s...</div>';
+        topoPollJob(d.job_id, statusEl, (job) => {
+            if (job.status === 'completed' && job.result) {
+                const hosts = job.result.hosts || [];
+                if (label) label.textContent = `Discovered Devices (${hosts.length} from sweep)`;
+                topoRenderDevices(grid, hosts);
+            } else {
+                grid.innerHTML = `<div class="topo-empty"><i class="fas fa-exclamation-triangle"></i>${escHtml(job.message)}</div>`;
+            }
+        });
+    } catch(e) {
+        if (statusEl) statusEl.textContent = 'Error: ' + e.message;
+    }
+}
+
+function topoSelectDevice(idx) {
+    const h = _topoDeviceMap[idx];
+    if (!h) return;
+    // Flash the clicked card
+    const card = document.getElementById('topo-dev-' + idx);
+    if (card) { card.style.borderColor = 'var(--accent-secondary)'; card.style.background = 'rgba(124,58,237,.08)'; }
+    const { ip, hostname, mac, vendor } = h;
+    topoState.host = ip;
+    topoState.hostInfo = h;
+    setEl('topo-device-title', hostname || ip);
+    setEl('topo-device-detail', `IP: ${ip}${mac ? '  •  MAC: ' + mac : ''}${vendor ? '  •  ' + vendor : ''}`);
+    document.getElementById('topo-ports-grid').innerHTML = '<div class="topo-empty"><i class="fas fa-plug"></i>Run a scan to discover open ports on this host</div>';
+    document.getElementById('topo-ports-raw').textContent = '';
+    setEl('topo-scan-status', 'Choose a scan type above — Fast is quickest, Service Scan gives version info');
+    topoGoLevel(2);
+}
+
+async function topoPortScan(mode) {
+    if (!topoState.host) return;
+    const statusEl = document.getElementById('topo-scan-status');
+    const grid = document.getElementById('topo-ports-grid');
+    const rawEl = document.getElementById('topo-ports-raw');
+    const modeLabel = {fast:'Fast (top 100 ports)', full:'Full (ports 1–1000)', service:'Service Scan (-sV)'}[mode] || mode;
+    if (statusEl) statusEl.innerHTML = `<i class="fas fa-spinner spin"></i> Starting ${modeLabel}...`;
+    grid.innerHTML = `<div class="topo-empty"><i class="fas fa-spinner spin"></i> Scanning — ${modeLabel} in progress...</div>`;
+    try {
+        const res = await fetch(API + '/api/topology/portscan', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({host: topoState.host, mode})
+        });
+        const d = await res.json();
+        if (!d.job_id) { statusEl.textContent = 'Failed to start scan'; return; }
+        topoPollJob(d.job_id, statusEl, (job) => {
+            if (job.result) {
+                const ports = job.result.ports || [];
+                if (rawEl) rawEl.textContent = job.result.output || '';
+                topoRenderPorts(grid, ports);
+            } else {
+                grid.innerHTML = `<div class="topo-empty"><i class="fas fa-exclamation-triangle"></i>${escHtml(job.message)}</div>`;
+            }
+        });
+    } catch(e) {
+        if (statusEl) statusEl.textContent = 'Error: ' + e.message;
+    }
+}
+
+function topoRenderPorts(grid, ports) {
+    if (!ports || !ports.length) {
+        grid.innerHTML = '<div class="topo-empty"><i class="fas fa-shield-alt"></i>No open ports found (or host blocked scan)</div>';
+        return;
+    }
+    const svcColors = {http:'#00d4ff',https:'#7c3aed',ssh:'#10b981',ftp:'#f59e0b',smtp:'#ef4444',dns:'#06b6d4',rdp:'#8b5cf6',mysql:'#f97316',postgresql:'#3b82f6'};
+    grid.innerHTML = ports.map(p => {
+        const col = svcColors[p.service] || 'var(--accent-primary)';
+        return `<div class="port-card">
+            <div style="display:flex;align-items:baseline;gap:.25rem;">
+                <span class="port-card-num" style="color:${col};">${p.port}</span>
+                <span class="port-proto-tag">${p.proto}</span>
+            </div>
+            <div class="port-card-svc">${escHtml(p.service)}</div>
+            ${p.version ? `<div class="port-card-ver" title="${escHtml(p.version)}">${escHtml(p.version)}</div>` : ''}
+        </div>`;
+    }).join('');
+}
+
+function topoPollJob(jobId, statusEl, onComplete) {
+    const poll = setInterval(async () => {
+        try {
+            const res = await fetch(API + '/api/jobs/' + jobId);
+            const job = await res.json();
+            if (statusEl) {
+                const pct = job.progress ? ` (${job.progress}%)` : '';
+                statusEl.innerHTML = `<i class="fas fa-spinner spin"></i> ${escHtml(job.message)}${pct}`;
+            }
+            if (job.status === 'completed' || job.status === 'error') {
+                clearInterval(poll);
+                if (statusEl) statusEl.innerHTML = `${job.status === 'error' ? '<i class="fas fa-exclamation-triangle" style="color:var(--accent-danger);"></i> ' : '<i class="fas fa-check" style="color:var(--accent-success);"></i> '}${escHtml(job.message)}`;
+                onComplete(job);
+            }
+        } catch(e) {
+            clearInterval(poll);
+            if (statusEl) statusEl.textContent = 'Poll error: ' + e.message;
+        }
+    }, 2000);
+}
+
+function buildTopology() { topoGoLevel(0); topoLoadSubnets(); }
 
 // ============================================================
 // SCREEN BUILDER

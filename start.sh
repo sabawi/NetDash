@@ -16,8 +16,12 @@ if [ -f "$PID_FILE" ]; then
     rm -f "$PID_FILE"
 fi
 
-# Also kill anything on port 8123
-fuser -k 8123/tcp 2>/dev/null || true
+# Kill anything still on port 8123 (cross-platform)
+if command -v fuser &>/dev/null; then
+    fuser -k 8123/tcp 2>/dev/null || true
+elif command -v lsof &>/dev/null; then
+    lsof -ti:8123 | xargs kill -9 2>/dev/null || true
+fi
 
 # Activate virtual environment
 if [ -f "$VENV/bin/activate" ]; then
