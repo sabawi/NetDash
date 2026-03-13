@@ -337,9 +337,107 @@
             #card-tray { left:0; }
             .card.card-maximized { left:0; }
         }
+
+        /* ═══════════════════════════════════════════════
+           SPLASH SCREEN
+        ═══════════════════════════════════════════════ */
+        #splash {
+            position:fixed; inset:0; z-index:9999;
+            display:flex; align-items:center; justify-content:center;
+            background:#050a14;
+            transition:opacity .7s ease, visibility .7s ease;
+        }
+        #splash.hidden { opacity:0; visibility:hidden; pointer-events:none; }
+
+        /* animated grid background */
+        #splash-canvas {
+            position:absolute; inset:0; width:100%; height:100%;
+        }
+
+        /* glowing ring logo */
+        .splash-logo-wrap {
+            position:relative; z-index:2;
+            display:flex; flex-direction:column; align-items:center; gap:1.6rem;
+            animation:splashFadeUp .9s ease both;
+        }
+        .splash-ring {
+            width:130px; height:130px; border-radius:50%;
+            border:2px solid rgba(0,212,255,.25);
+            display:flex; align-items:center; justify-content:center;
+            position:relative;
+        }
+        .splash-ring::before {
+            content:''; position:absolute; inset:-8px; border-radius:50%;
+            border:2px solid transparent;
+            border-top-color:#00d4ff; border-right-color:#7c3aed;
+            animation:splashSpin 1.8s linear infinite;
+        }
+        .splash-ring::after {
+            content:''; position:absolute; inset:-18px; border-radius:50%;
+            border:1px solid transparent;
+            border-bottom-color:rgba(0,212,255,.4);
+            animation:splashSpin 3s linear infinite reverse;
+        }
+        .splash-icon {
+            font-size:3.2rem;
+            background:linear-gradient(135deg,#00d4ff,#7c3aed);
+            -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+            filter:drop-shadow(0 0 18px rgba(0,212,255,.55));
+        }
+        .splash-title {
+            font-size:3rem; font-weight:800; letter-spacing:.08em;
+            background:linear-gradient(135deg,#00d4ff 0%,#7c3aed 60%,#00d4ff 100%);
+            background-size:200% auto;
+            -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+            animation:splashShimmer 3s linear infinite;
+            text-shadow:none;
+        }
+        .splash-sub {
+            font-size:1rem; letter-spacing:.18em; text-transform:uppercase;
+            color:rgba(148,163,184,.75); font-weight:300;
+            animation:splashFadeUp .9s .2s ease both;
+        }
+        .splash-author {
+            font-size:.85rem; letter-spacing:.18em; text-transform:uppercase;
+            color:#cbd5e1; font-weight:400;
+            animation:splashFadeUp .9s .4s ease both;
+        }
+        .splash-bar-wrap {
+            width:220px; height:2px; background:rgba(255,255,255,.08);
+            border-radius:2px; overflow:hidden; margin-top:.4rem;
+            animation:splashFadeUp .9s .5s ease both;
+        }
+        .splash-bar {
+            height:100%;
+            background:linear-gradient(90deg,#00d4ff,#7c3aed,#00d4ff);
+            background-size:200% auto;
+            animation:splashBarFill 1.8s ease forwards, splashShimmer 2s linear infinite;
+        }
+
+        @keyframes splashSpin    { to { transform:rotate(360deg); } }
+        @keyframes splashShimmer { to { background-position:200% center; } }
+        @keyframes splashFadeUp  { from { opacity:0; transform:translateY(18px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes splashBarFill { from { width:0; } to { width:100%; } }
+
     </style>
 </head>
 <body>
+
+<!-- ═══════════════ SPLASH SCREEN ═══════════════ -->
+<div id="splash">
+    <canvas id="splash-canvas"></canvas>
+    <div class="splash-logo-wrap">
+        <div class="splash-ring">
+            <span class="splash-icon"><i class="fas fa-network-wired"></i></span>
+        </div>
+        <div class="splash-title">NetDash</div>
+        <div class="splash-sub">Network &amp; System Control Center</div>
+        <div class="splash-author">by Al Sabawi</div>
+        <div class="splash-bar-wrap"><div class="splash-bar"></div></div>
+    </div>
+</div>
+<!-- ════════════════════════════════════════════ -->
+
 <div class="app-container">
 
     <!-- Sidebar -->
@@ -2589,6 +2687,81 @@ function initResizeDrag(card, handle) {
         handle.addEventListener('touchend', onEnd);
     }, {passive:true});
 }
+
+// ═══════════════════════════════════════════════
+// SPLASH SCREEN  –  animated node-graph canvas
+// ═══════════════════════════════════════════════
+(function(){
+    const splash = document.getElementById('splash');
+    const canvas = document.getElementById('splash-canvas');
+    const ctx    = canvas.getContext('2d');
+    let W, H, nodes = [], raf;
+
+    function resize(){
+        W = canvas.width  = window.innerWidth;
+        H = canvas.height = window.innerHeight;
+    }
+
+    function mkNode(){
+        return {
+            x: Math.random()*W, y: Math.random()*H,
+            vx:(Math.random()-.5)*.38, vy:(Math.random()-.5)*.38,
+            r: Math.random()*2+1,
+            a: Math.random()
+        };
+    }
+
+    function initNodes(){
+        nodes = [];
+        const n = Math.min(90, Math.floor(W*H/12000));
+        for(let i=0;i<n;i++) nodes.push(mkNode());
+    }
+
+    function draw(){
+        ctx.clearRect(0,0,W,H);
+        // grid dots & lines
+        for(let i=0;i<nodes.length;i++){
+            const a = nodes[i];
+            a.x += a.vx; a.y += a.vy;
+            if(a.x<0||a.x>W) a.vx*=-1;
+            if(a.y<0||a.y>H) a.vy*=-1;
+
+            for(let j=i+1;j<nodes.length;j++){
+                const b=nodes[j];
+                const dx=a.x-b.x, dy=a.y-b.y;
+                const dist=Math.sqrt(dx*dx+dy*dy);
+                if(dist<160){
+                    const alpha=(1-dist/160)*.18;
+                    ctx.beginPath();
+                    ctx.strokeStyle=`rgba(0,212,255,${alpha})`;
+                    ctx.lineWidth=.7;
+                    ctx.moveTo(a.x,a.y);
+                    ctx.lineTo(b.x,b.y);
+                    ctx.stroke();
+                }
+            }
+            // node dot
+            ctx.beginPath();
+            ctx.arc(a.x,a.y,a.r,0,Math.PI*2);
+            ctx.fillStyle=`rgba(0,212,255,${.25+a.a*.35})`;
+            ctx.fill();
+        }
+        raf = requestAnimationFrame(draw);
+    }
+
+    function dismiss(){
+        cancelAnimationFrame(raf);
+        splash.classList.add('hidden');
+        setTimeout(()=>splash.remove(), 800);
+    }
+
+    window.addEventListener('resize', ()=>{ resize(); initNodes(); });
+    resize(); initNodes(); draw();
+
+    // dismiss after 2.6 s (bar animation finishes at ~1.8 s)
+    setTimeout(dismiss, 2600);
+    splash.addEventListener('click', dismiss);
+}());
 
 // Bootstrap on load
 document.addEventListener('DOMContentLoaded', () => {
