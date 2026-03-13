@@ -386,6 +386,11 @@
             </div>
         </div>
 
+        <div class="nav-section" id="my-screens-nav" style="display:none;">
+            <h3>My Screens</h3>
+            <div id="my-screens-nav-items"></div>
+        </div>
+
         <div class="conn-status">
             <div class="conn-dot" id="ws-dot"></div>
             <span id="ws-label">Connecting…</span>
@@ -904,7 +909,9 @@
         <div id="view-builder" class="view-section">
             <div class="page-header">
                 <div><h2>Screen Builder</h2></div>
-                <div class="header-actions">
+                <div class="header-actions" style="align-items:center;">
+                    <input type="text" id="builder-screen-name" class="form-control"
+                           placeholder="Screen name…" style="width:220px;">
                     <button class="btn btn-secondary" onclick="clearCanvas()"><i class="fas fa-trash"></i> Clear</button>
                     <button class="btn btn-primary" onclick="saveScreen()"><i class="fas fa-save"></i> Save Screen</button>
                 </div>
@@ -946,6 +953,31 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Saved screens list -->
+            <div style="margin-top:1.5rem;">
+                <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:.09em;color:var(--text-secondary);font-weight:600;margin-bottom:.65rem;">
+                    Saved Screens
+                </div>
+                <div id="saved-screens-list" style="display:flex;flex-wrap:wrap;gap:.75rem;">
+                    <div class="text-muted" style="font-size:.85rem;">No saved screens yet</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== CUSTOM SCREEN VIEW ===== -->
+        <div id="view-custom" class="view-section">
+            <div class="page-header">
+                <div>
+                    <h2 id="custom-screen-title">Custom Screen</h2>
+                    <span class="live-badge">Live Data</span>
+                </div>
+                <div class="header-actions">
+                    <button class="btn btn-secondary" onclick="editCustomScreen()"><i class="fas fa-edit"></i> Edit</button>
+                    <button class="btn btn-secondary" onclick="refreshCustomScreen()"><i class="fas fa-sync-alt"></i> Refresh</button>
+                </div>
+            </div>
+            <div id="custom-screen-grid" class="charts-grid"></div>
         </div>
 
     </main><!-- /main-content -->
@@ -1003,6 +1035,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initTabSwitching();
     initDragDrop();
     initCmdSelect();
+    loadSavedScreens();   // populate sidebar My Screens on startup
     connectWS();
     fetchSystemInfo();
     fetchNetworkData();
@@ -1934,6 +1967,8 @@ function addCanvasCard(type, cols) {
     if (ph) ph.remove();
     const card = document.createElement('div');
     card.className = `canvas-card col-${cols}`;
+    card.dataset.type = type;   // store type reliably for save
+    card.dataset.cols = cols;
     card.innerHTML = `
         <div class="canvas-card-hdr">
             <span>${CARD_TITLES[type] || type}</span>
@@ -1941,7 +1976,7 @@ function addCanvasCard(type, cols) {
                 <i class="fas fa-times"></i>
             </button>
         </div>
-        <div class="canvas-card-body"><i class="fas fa-chart-line" style="margin-right:.4rem;"></i>${type}</div>`;
+        <div class="canvas-card-body"><i class="fas fa-chart-line" style="margin-right:.4rem;"></i>${escHtml(type)}</div>`;
     grid.appendChild(card);
 }
 
@@ -1955,18 +1990,315 @@ function clearCanvas() {
 }
 
 async function saveScreen() {
-    const cards = Array.from(document.querySelectorAll('#canvas-grid .canvas-card')).map((c, i) => ({
-        id: 'c' + i, type: c.querySelector('.canvas-card-body').textContent.trim(),
+    const nameEl = document.getElementById('builder-screen-name');
+    const name = nameEl ? nameEl.value.trim() : '';
+    if (!name) {
+        nameEl && (nameEl.style.borderColor = 'var(--accent-danger)');
+        nameEl && nameEl.focus();
+        return;
+    }
+    nameEl.style.borderColor = '';
+
+    const cardEls = Array.from(document.querySelectorAll('#canvas-grid .canvas-card'));
+    if (!cardEls.length) {
+        alert('Add at least one card to the canvas before saving.');
+        return;
+    }
+
+    const cards = cardEls.map((c, i) => ({
+        id: 'c' + i,
+        type: c.dataset.type || c.querySelector('.canvas-card-body').textContent.trim(),
         title: c.querySelector('.canvas-card-hdr span').textContent,
-        position: {x: 0, y: i, w: 4, h: 2}, config: {}
+        cols: c.dataset.cols || '4',
+        position: { x: 0, y: i, w: parseInt(c.dataset.cols || 4), h: 2 },
+        config: {}
     }));
+
     try {
         const res = await fetch(API + '/api/dashboards', {
-            method: 'POST', headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({ name: 'Custom Screen ' + new Date().toLocaleTimeString(), cards })
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, cards })
         });
-        if (res.ok) alert('Screen saved successfully!');
-    } catch(e) { alert('Save failed: ' + e); }
+        const data = await res.json();
+        if (res.ok) {
+            nameEl.value = '';
+            loadSavedScreens();
+            alert(`Screen "${name}" saved (${cards.length} card${cards.length !== 1 ? 's' : ''}).`);
+        } else {
+            alert('Save failed: ' + (data.error || res.status));
+        }
+    } catch(e) {
+        alert('Save failed: ' + e.message);
+    }
+}
+
+async function loadSavedScreens() {
+    const list = document.getElementById('saved-screens-list');
+    try {
+        const res = await fetch(API + '/api/dashboards');
+        const all = await res.json();
+        // exclude the auto-created default dashboard from the user's list
+        const screens = all.filter(s => !s.is_default);
+
+        // ── Builder panel list ─────────────────────────────────────────
+        if (list) {
+            if (!screens.length) {
+                list.innerHTML = '<div class="text-muted" style="font-size:.85rem;">No saved screens yet</div>';
+            } else {
+                list.innerHTML = screens.map(s => `
+                    <div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:.5rem;padding:.65rem .875rem;display:flex;align-items:center;gap:.75rem;min-width:200px;">
+                        <div style="flex:1;">
+                            <div style="font-weight:600;font-size:.9rem;">${escHtml(s.name)}</div>
+                            <div style="font-size:.75rem;color:var(--text-secondary);">${s.card_count || 0} card${s.card_count !== 1 ? 's' : ''}</div>
+                        </div>
+                        <button class="btn btn-primary" style="padding:.3rem .6rem;font-size:.75rem;" onclick="viewCustomScreen('${s.id}')">
+                            <i class="fas fa-play"></i> View
+                        </button>
+                        <button class="btn btn-secondary" style="padding:.3rem .6rem;font-size:.75rem;" onclick="loadScreenOntoCanvas('${s.id}')">
+                            <i class="fas fa-edit"></i> Edit
+                        </button>
+                        <button class="btn btn-danger" style="padding:.3rem .6rem;font-size:.75rem;" onclick="deleteScreen('${s.id}')">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>`).join('');
+            }
+        }
+
+        // ── Sidebar "My Screens" section ───────────────────────────────
+        const navSection = document.getElementById('my-screens-nav');
+        const navItems   = document.getElementById('my-screens-nav-items');
+        if (navSection && navItems) {
+            if (!screens.length) {
+                navSection.style.display = 'none';
+            } else {
+                navSection.style.display = '';
+                navItems.innerHTML = screens.map(s => `
+                    <div class="nav-item" onclick="viewCustomScreen('${s.id}')">
+                        <i class="fas fa-desktop"></i>
+                        <span>${escHtml(s.name)}</span>
+                    </div>`).join('');
+            }
+        }
+    } catch(e) {
+        if (list) list.innerHTML = '<div class="text-muted" style="font-size:.85rem;">Failed to load screens</div>';
+    }
+}
+
+async function loadScreenOntoCanvas(id) {
+    try {
+        const res = await fetch(API + '/api/dashboards/' + id);
+        const screen = await res.json();
+        if (!screen || !screen.cards) return;
+        clearCanvas();
+        const nameEl = document.getElementById('builder-screen-name');
+        if (nameEl) nameEl.value = screen.name || '';
+        screen.cards.forEach(c => addCanvasCard(c.type, c.cols || c.position?.w || 4));
+    } catch(e) {
+        alert('Failed to load screen: ' + e.message);
+    }
+}
+
+async function deleteScreen(id, btn) {
+    if (!confirm('Delete this screen?')) return;
+    try {
+        const res = await fetch(API + '/api/dashboards/' + id, { method: 'DELETE' });
+        if (res.ok) loadSavedScreens();
+        else alert('Delete failed: ' + res.status);
+    } catch(e) {
+        alert('Delete failed: ' + e.message);
+    }
+}
+
+// ============================================================
+// CUSTOM SCREEN VIEWER
+// ============================================================
+let _customScreenId = null;
+
+async function viewCustomScreen(id) {
+    try {
+        const res = await fetch(API + '/api/dashboards/' + id);
+        const screen = await res.json();
+        if (!screen || !screen.cards) { alert('Screen not found or has no cards.'); return; }
+        _customScreenId = id;
+        setEl('custom-screen-title', screen.name);
+
+        const grid = document.getElementById('custom-screen-grid');
+        grid.innerHTML = screen.cards.map(c => buildLiveCardHTML(c)).join('');
+
+        // mark sidebar item active
+        document.querySelectorAll('#my-screens-nav-items .nav-item').forEach(el => {
+            el.classList.toggle('active', el.getAttribute('onclick') === `viewCustomScreen('${id}')`);
+        });
+
+        switchView('custom');
+        bindLiveCards(screen.cards);
+    } catch(e) {
+        alert('Failed to load screen: ' + e.message);
+    }
+}
+
+function refreshCustomScreen() {
+    if (_customScreenId) viewCustomScreen(_customScreenId);
+}
+
+function editCustomScreen() {
+    if (_customScreenId) { loadScreenOntoCanvas(_customScreenId); switchView('builder'); }
+}
+
+// Build the static HTML shell for a live card
+function buildLiveCardHTML(c) {
+    const title = c.title || CARD_TITLES[c.type] || c.type;
+    const icon = {
+        system_cpu:'microchip', system_memory:'memory', system_network:'network-wired',
+        system_disk:'hdd', system_procs:'list-ul', chart_line:'chart-line',
+        net_interfaces:'ethernet', net_connections:'project-diagram', cmd_output:'terminal'
+    }[c.type] || 'chart-bar';
+
+    let body = '';
+    switch (c.type) {
+        case 'system_cpu':
+            body = `<div class="stat-box" style="text-align:center;padding:1.5rem;">
+                        <div class="stat-val" id="cs-cpu-val" style="font-size:2.5rem;">—%</div>
+                        <div class="stat-lbl">CPU Usage</div>
+                        <div class="progress-bar" style="margin-top:.75rem;">
+                            <div class="progress-bar-fill low" id="cs-cpu-bar" style="width:0%"></div>
+                        </div>
+                    </div>`;
+            break;
+        case 'system_memory':
+            body = `<div class="stat-box" style="text-align:center;padding:1.5rem;">
+                        <div class="stat-val" id="cs-mem-val" style="font-size:2.5rem;">—%</div>
+                        <div class="stat-lbl">Memory Used</div>
+                        <div class="progress-bar" style="margin-top:.75rem;">
+                            <div class="progress-bar-fill low" id="cs-mem-bar" style="width:0%"></div>
+                        </div>
+                        <div class="text-muted" id="cs-mem-detail" style="font-size:.78rem;margin-top:.4rem;"></div>
+                    </div>`;
+            break;
+        case 'system_disk':
+            body = `<div id="cs-disk-body" class="stat-box" style="padding:.75rem;">
+                        <div class="text-muted" style="font-size:.85rem;">Loading…</div>
+                    </div>`;
+            break;
+        case 'system_network':
+            body = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;text-align:center;">
+                        <div class="stat-box"><div class="stat-val" id="cs-net-rx" style="color:var(--accent-success);">—</div><div class="stat-lbl">↓ Recv KB/s</div></div>
+                        <div class="stat-box"><div class="stat-val" id="cs-net-tx" style="color:var(--accent-warning);">—</div><div class="stat-lbl">↑ Sent KB/s</div></div>
+                    </div>`;
+            break;
+        case 'system_procs':
+            body = `<div class="table-wrap"><table class="data-table">
+                        <thead><tr><th>PID</th><th>Name</th><th>CPU%</th><th>Mem%</th></tr></thead>
+                        <tbody id="cs-procs-body"><tr><td colspan="4" class="text-muted">Loading…</td></tr></tbody>
+                    </table></div>`;
+            break;
+        case 'net_interfaces':
+            body = `<div id="cs-ifaces-body" class="text-muted" style="font-size:.85rem;">Loading…</div>`;
+            break;
+        case 'net_connections':
+            body = `<div class="table-wrap"><table class="data-table">
+                        <thead><tr><th>Local</th><th>Remote</th><th>Status</th></tr></thead>
+                        <tbody id="cs-conns-body"><tr><td colspan="3" class="text-muted">Loading…</td></tr></tbody>
+                    </table></div>`;
+            break;
+        default:
+            body = `<div class="text-muted" style="font-size:.85rem;padding:.5rem;">Widget: ${escHtml(c.type)}</div>`;
+    }
+
+    return `<div class="card">
+        <div class="card-header">
+            <div class="card-title"><i class="fas fa-${icon}"></i> ${escHtml(title)}</div>
+        </div>
+        <div class="card-body">${body}</div>
+    </div>`;
+}
+
+// Fetch live data and populate the rendered cards
+async function bindLiveCards(cards) {
+    const types = new Set(cards.map(c => c.type));
+
+    if (types.has('system_cpu') || types.has('system_memory') || types.has('system_network')) {
+        try {
+            const d = await fetch(API + '/api/metrics/system').then(r => r.json());
+            if (types.has('system_cpu') && d.cpu) {
+                const pct = d.cpu.percent || 0;
+                setEl('cs-cpu-val', pct.toFixed(1) + '%');
+                const bar = document.getElementById('cs-cpu-bar');
+                if (bar) { bar.style.width = pct + '%'; bar.className = `progress-bar-fill ${pct>80?'high':pct>50?'mid':'low'}`; }
+            }
+            if (types.has('system_memory') && d.memory) {
+                const pct = d.memory.percent || 0;
+                const used = ((d.memory.used||0)/1e9).toFixed(1);
+                const total = ((d.memory.total||0)/1e9).toFixed(1);
+                setEl('cs-mem-val', pct.toFixed(1) + '%');
+                setEl('cs-mem-detail', `${used} GB / ${total} GB`);
+                const bar = document.getElementById('cs-mem-bar');
+                if (bar) { bar.style.width = pct + '%'; bar.className = `progress-bar-fill ${pct>85?'high':pct>65?'mid':'low'}`; }
+            }
+            if (types.has('system_network') && d.network) {
+                setEl('cs-net-rx', ((d.network.bytes_recv_ps||0)/1024).toFixed(1));
+                setEl('cs-net-tx', ((d.network.bytes_sent_ps||0)/1024).toFixed(1));
+            }
+        } catch(e) {}
+    }
+
+    if (types.has('system_disk')) {
+        try {
+            const disks = await fetch(API + '/api/system/disks').then(r => r.json());
+            const body = document.getElementById('cs-disk-body');
+            if (body && disks.length) {
+                body.innerHTML = disks.slice(0,4).map(d => `
+                    <div style="margin-bottom:.5rem;">
+                        <div style="display:flex;justify-content:space-between;font-size:.82rem;margin-bottom:.2rem;">
+                            <span>${escHtml(d.mountpoint)}</span>
+                            <span>${d.percent}%</span>
+                        </div>
+                        <div class="progress-bar"><div class="progress-bar-fill ${d.percent>90?'high':d.percent>75?'mid':'low'}" style="width:${d.percent}%"></div></div>
+                    </div>`).join('');
+            }
+        } catch(e) {}
+    }
+
+    if (types.has('system_procs')) {
+        try {
+            const d = await fetch(API + '/api/metrics/processes').then(r => r.json());
+            const tbody = document.getElementById('cs-procs-body');
+            if (tbody && d.top_cpu) {
+                tbody.innerHTML = d.top_cpu.slice(0,8).map(p =>
+                    `<tr><td class="text-muted">${p.pid}</td><td>${escHtml(p.name)}</td>
+                     <td>${p.cpu_pct.toFixed(1)}%</td><td>${p.mem_pct.toFixed(1)}%</td></tr>`
+                ).join('');
+            }
+        } catch(e) {}
+    }
+
+    if (types.has('net_interfaces')) {
+        try {
+            const ifaces = await fetch(API + '/api/system/interfaces').then(r => r.json());
+            const body = document.getElementById('cs-ifaces-body');
+            if (body && ifaces.length) {
+                body.innerHTML = `<table class="data-table"><thead><tr><th>Interface</th><th>IP</th><th>Status</th></tr></thead><tbody>
+                    ${ifaces.filter(i=>i.ipv4).map(i=>`<tr>
+                        <td>${escHtml(i.name)}</td><td class="text-muted">${escHtml(i.ipv4||'—')}</td>
+                        <td><span class="badge ${i.is_up?'badge-success':'badge-danger'}">${i.is_up?'Up':'Down'}</span></td>
+                    </tr>`).join('')}</tbody></table>`;
+            }
+        } catch(e) {}
+    }
+
+    if (types.has('net_connections')) {
+        try {
+            const conns = await fetch(API + '/api/system/connections').then(r => r.json());
+            const tbody = document.getElementById('cs-conns-body');
+            if (tbody && conns.length) {
+                tbody.innerHTML = conns.slice(0,10).map(c =>
+                    `<tr><td class="text-muted">${escHtml(c.laddr)}</td>
+                     <td class="text-muted">${escHtml(c.raddr||'—')}</td>
+                     <td>${escHtml(c.status)}</td></tr>`
+                ).join('');
+            }
+        } catch(e) {}
+    }
 }
 
 // ============================================================
@@ -2013,6 +2345,7 @@ function switchView(viewName) {
     if (viewName === 'network') { fetchNetworkData(); }
     if (viewName === 'processes') { fetchProcesses(); }
     if (viewName === 'topology') { buildTopology(); }
+    if (viewName === 'builder')  { loadSavedScreens(); }
     // Attach window controls to any newly visible cards
     setTimeout(initCardControls, 100);
 }

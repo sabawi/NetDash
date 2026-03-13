@@ -28,7 +28,7 @@ from flask_socketio import SocketIO, emit, join_room, leave_room
 from flask_cors import CORS
 import psutil
 
-__version__ = "1.0.2"
+__version__ = "1.0.4"
 
 # ==============================================================================
 # CONFIGURATION
@@ -362,7 +362,7 @@ class DashboardStore:
     def get(self, dash_id: str) -> Optional[dict]:
         return self._dashboards.get(dash_id)
 
-    def create(self, name: str, description: str = "") -> dict:
+    def create(self, name: str, description: str = "", cards: list = None) -> dict:
         dash_id = str(uuid.uuid4())[:8]
         d = {
             "id": dash_id, "name": name, "description": description,
@@ -370,7 +370,7 @@ class DashboardStore:
             "created_at": datetime.now().isoformat(),
             "updated_at": datetime.now().isoformat(),
             "layout": {"columns": 12, "row_height": 80},
-            "cards": [],
+            "cards": cards if cards is not None else [],
         }
         self._dashboards[dash_id] = d
         self._save(dash_id)
@@ -632,7 +632,8 @@ def api_create_dashboard():
     data = request.get_json() or {}
     name = data.get("name", "New Dashboard")
     desc = data.get("description", "")
-    d = store.create(name, desc)
+    cards = data.get("cards")  # may be None (no cards key) or a list
+    d = store.create(name, desc, cards)
     return jsonify(d), 201
 
 @app.route("/api/dashboards/<dash_id>", methods=["GET"])
@@ -819,13 +820,13 @@ def _parse_nmap_hosts(output: str) -> list:
             raw = m.group(1).strip()
             hm = re.match(r'^(.+?)\s+\((\d+\.\d+\.\d+\.\d+)\)$', raw)
             if hm:
-                current = {"hostname": hm.group(1), "ip": hm.group(2), "mac": "", "vendor": "", "status": "up"}
+                current = {"hostname": hm.group(1), "ip": hm.group(2), "mac": "", "vendor": "", "state": "up"}
             else:
-                current = {"hostname": "", "ip": raw, "mac": "", "vendor": "", "status": "up"}
+                current = {"hostname": "", "ip": raw, "mac": "", "vendor": "", "state": "up"}
         elif "Host is up" in line and current:
-            current["status"] = "up"
+            current["state"] = "reachable"
         elif "Host is down" in line and current:
-            current["status"] = "down"
+            current["state"] = "down"
         elif line.startswith("MAC Address:") and current:
             mm = re.match(r'MAC Address: ([0-9A-Fa-f:]+)\s*(?:\((.+?)\))?', line)
             if mm:
@@ -851,11 +852,38 @@ def _parse_nmap_ports(output: str) -> list:
     return ports
 
 
+def _enrich_with_arp(hosts: list) -> list:
+    """Add MAC/vendor from kernel ARP cache for any hosts missing a MAC."""
+    try:
+        if IS_MACOS:
+            r = subprocess.run(["arp", "-an"], capture_output=True, text=True, timeout=5)
+            arp_map = {}
+            for line in r.stdout.splitlines():
+                m = re.match(r'\S+\s+\((\d+\.\d+\.\d+\.\d+)\)\s+at\s+([0-9a-fA-F:]+)\s+on\s+(\S+)', line)
+                if m:
+                    arp_map[m.group(1)] = m.group(2)
+        else:
+            r = subprocess.run(["ip", "-j", "neigh", "show"], capture_output=True, text=True, timeout=5)
+            arp_map = {}
+            for n in json.loads(r.stdout or "[]"):
+                if n.get("dst") and n.get("lladdr"):
+                    arp_map[n["dst"]] = n["lladdr"]
+        for h in hosts:
+            if not h.get("mac") and h.get("ip") in arp_map:
+                h["mac"] = arp_map[h["ip"]]
+    except Exception:
+        pass
+    return hosts
+
+
 def _topo_sweep_job(jid: str, subnet: str):
     update_job(jid, status="running", progress=10, message=f"Sweeping {subnet}...")
     try:
         r = subprocess.run(["nmap", "-sn", "-T4", subnet], capture_output=True, text=True, timeout=60)
         hosts = _parse_nmap_hosts(r.stdout)
+        update_job(jid, status="running", progress=75, message=f"Found {len(hosts)} host(s), resolving MACs and names...")
+        hosts = _enrich_with_arp(hosts)
+        hosts = _resolve_hostnames(hosts)
         update_job(jid, status="completed", progress=100,
                    message=f"Found {len(hosts)} host(s)",
                    result={"hosts": hosts, "output": r.stdout})
@@ -875,7 +903,7 @@ def _topo_sweep_job(jid: str, subnet: str):
                     state = n.get("state", [])
                     if isinstance(state, list): state = state[0] if state else ""
                     if str(state).upper() in ("REACHABLE", "STALE", "DELAY", "PROBE", "PERMANENT"):
-                        hosts.append({"ip": n.get("dst", ""), "hostname": "", "mac": n.get("lladdr", ""), "vendor": "", "status": "up"})
+                        hosts.append({"ip": n.get("dst", ""), "hostname": "", "mac": n.get("lladdr", ""), "vendor": "", "state": str(state).lower()})
             update_job(jid, status="completed", progress=100,
                        message=f"Found {len(hosts)} host(s) (ARP cache only — install nmap for full sweep)",
                        result={"hosts": hosts, "output": "ARP cache fallback — nmap not installed"})
@@ -921,6 +949,30 @@ def api_topo_subnets():
         return jsonify({"error": str(e)}), 500
 
 
+def _resolve_hostnames(hosts: list) -> list:
+    """Reverse-DNS each host IP concurrently; fills hostname if not already set."""
+    def _rdns(h):
+        if h.get("hostname"):
+            return h
+        try:
+            name, _, _ = socket.gethostbyaddr(h["ip"])
+            if name and name != h["ip"]:
+                h["hostname"] = name
+        except Exception:
+            pass
+        return h
+
+    with ThreadPoolExecutor(max_workers=30) as ex:
+        futures = {ex.submit(_rdns, h): h for h in hosts}
+        resolved = []
+        for fut, orig in futures.items():
+            try:
+                resolved.append(fut.result(timeout=2))
+            except Exception:
+                resolved.append(orig)
+    return resolved
+
+
 def _parse_arp_an(output: str) -> list:
     """Parse `arp -an` output (macOS/BSD format) into host list."""
     hosts = []
@@ -950,7 +1002,7 @@ def api_topo_arp():
                     hosts.append({"ip": n.get("dst", ""), "mac": n.get("lladdr", ""),
                                   "dev": n.get("dev", ""), "state": str(state).lower(),
                                   "hostname": "", "vendor": ""})
-        return jsonify(hosts)
+        return jsonify(_resolve_hostnames(hosts))
     except Exception:
         return jsonify([])
 
