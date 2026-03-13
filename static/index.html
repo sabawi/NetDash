@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🌐 Network Dashboard</h1>
+            <div class="status-bar">
+                <span id="connection-status" class="status disconnected">Disconnected</span>
+                <span id="last-update">Last update: Never</span>
+            </div>
+        </header>
+
+        <nav class="tabs">
+            <button class="tab active" data-tab="discovery">Discovery</button>
+            <button class="tab" data-tab="interfaces">Interfaces</button>
+            <button class="tab" data-tab="connections">Connections</button>
+            <button class="tab" data-tab="ports">Port Scanner</button>
+            <button class="tab" data-tab="dns">DNS Tools</button>
+            <button class="tab" data-tab="topology">Topology</button>
+        </nav>
+
+        <!-- Discovery Tab -->
+        <section id="discovery" class="tab-content active">
+            <div class="control-panel">
+                <h2>Network Discovery</h2>
+                <div class="input-group">
+                    <label for="subnet">Subnet/CIDR:</label>
+                    <input type="text" id="subnet" placeholder="192.168.1.0/24" value="192.168.1.0/24">
+                </div>
+                <div class="button-group">
+                    <button id="btn-discover" class="btn primary">🔍 Discover Hosts</button>
+                    <button id="btn-arp" class="btn secondary">📋 ARP Scan</button>
+                    <button id="btn-ping-sweep" class="btn secondary">📡 Ping Sweep</button>
+                </div>
+            </div>
+            <div class="results">
+                <h3>Discovered Hosts</h3>
+                <div class="results-controls">
+                    <input type="text" id="host-filter" placeholder="Filter hosts...">
+                    <button id="btn-export-hosts" class="btn small">Export CSV</button>
+                </div>
+                <table id="hosts-table">
+                    <thead>
+                        <tr>
+                            <th>IP Address</th>
+                            <th>MAC Address</th>
+                            <th>Hostname</th>
+                            <th>Status</th>
+                            <th>Response Time</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="hosts-body"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Interfaces Tab -->
+        <section id="interfaces" class="tab-content">
+            <div class="control-panel">
+                <h2>Network Interfaces</h2>
+                <button id="btn-refresh-interfaces" class="btn primary">🔄 Refresh</button>
+            </div>
+            <div class="results">
+                <div id="interfaces-grid" class="card-grid"></div>
+            </div>
+        </section>
+
+        <!-- Connections Tab -->
+        <section id="connections" class="tab-content">
+            <div class="control-panel">
+                <h2>Active Connections</h2>
+                <div class="input-group">
+                    <label for="conn-filter">Filter:</label>
+                    <select id="conn-filter">
+                        <option value="all">All</option>
+                        <option value="tcp">TCP</option>
+                        <option value="udp">UDP</option>
+                        <option value="listening">Listening</option>
+                        <option value="established">Established</option>
+                    </select>
+                </div>
+                <button id="btn-refresh-connections" class="btn primary">🔄 Refresh</button>
+            </div>
+            <div class="results">
+                <table id="connections-table">
+                    <thead>
+                        <tr>
+                            <th>Protocol</th>
+                            <th>Local Address</th>
+                            <th>Remote Address</th>
+                            <th>State</th>
+                            <th>PID</th>
+                            <th>Process</th>
+                        </tr>
+                    </thead>
+                    <tbody id="connections-body"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Port Scanner Tab -->
+        <section id="ports" class="tab-content">
+            <div class="control-panel">
+                <h2>Port Scanner</h2>
+                <div class="input-row">
+                    <div class="input-group">
+                        <label for="scan-target">Target:</label>
+                        <input type="text" id="scan-target" placeholder="Hostname or IP">
+                    </div>
+                    <div class="input-group">
+                        <label for="port-range">Port Range:</label>
+                        <input type="text" id="port-range" placeholder="1-1000" value="1-1000">
+                    </div>
+                </div>
+                <div class="input-row">
+                    <div class="input-group">
+                        <label for="scan-type">Scan Type:</label>
+                        <select id="scan-type">
+                            <option value="connect">TCP Connect</option>
+                            <option value="syn">SYN Scan</option>
+                            <option value="udp">UDP Scan</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="button-group">
+                    <button id="btn-scan-ports" class="btn primary">🚀 Start Scan</button>
+                    <button id="btn-cancel-scan" class="btn danger" disabled>⏹ Cancel</button>
+                </div>
+            </div>
+            <div class="progress-container" id="scan-progress" style="display: none;">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+                <span id="progress-text">0%</span>
+            </div>
+            <div class="results">
+                <h3>Scan Results</h3>
+                <table id="ports-table">
+                    <thead>
+                        <tr>
+                            <th>Port</th>
+                            <th>State</th>
+                            <th>Service</th>
+                            <th>Version</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ports-body"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- DNS Tools Tab -->
+        <section id="dns" class="tab-content">
+            <div class="control-panel">
+                <h2>DNS Tools</h2>
+                <div class="input-row">
+                    <div class="input-group">
+                        <label for="dns-hostname">Hostname:</label>
+                        <input type="text" id="dns-hostname" placeholder="example.com">
+                    </div>
+                    <div class="input-group">
+                        <label for="dns-type">Record Type:</label>
+                        <select id="dns-type">
+                            <option value="A">A</option>
+                            <option value="AAAA">AAAA</option>
+                            <option value="MX">MX</option>
+                            <option value="NS">NS</option>
+                            <option value="TXT">TXT</option>
+                            <option value="CNAME">CNAME</option>
+                            <option value="SOA">SOA</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="button-group">
+                    <button id="btn-dns-lookup" class="btn primary">🔍 Lookup</button>
+                    <button id="btn-reverse-dns" class="btn secondary">🔄 Reverse Lookup</button>
+                </div>
+            </div>
+            <div class="results">
+                <h3>DNS Results</h3>
+                <pre id="dns-results"></pre>
+            </div>
+        </section>
+
+        <!-- Topology Tab -->
+        <section id="topology" class="tab-content">
+            <div class="control-panel">
+                <h2>Network Topology</h2>
+                <button id="btn-generate-topology" class="btn primary">🗺 Generate Topology</button>
+                <button id="btn-export-topology" class="btn secondary">📥 Export JSON</button>
+            </div>
+            <div class="results">
+                <div class="topology-container">
+                    <canvas id="topology-canvas" width="800" height="600"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- Real-time Stats Panel -->
+        <aside class="stats-panel">
+            <h3>📊 Real-time Stats</h3>
+            <div class="stat-card">
+                <span class="stat-label">Total Hosts</span>
+                <span class="stat-value" id="stat-hosts">0</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">Active Connections</span>
+                <span class="stat-value" id="stat-connections">0</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">Open Ports</span>
+                <span class="stat-value" id="stat-ports">0</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">Network Latency</span>
+                <span class="stat-value" id="stat-latency">--</span>
+            </div>
+            <div class="chart-container">
+                <canvas id="traffic-chart"></canvas>
+            </div>
+        </aside>
+    </div>
+
+    <!-- Modal for host details -->
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close">&times;</span>
+            <h2 id="modal-title">Host Details</h2>
+            <div id="modal-body"></div>
+        </div>
+    </div>
+
+    <!-- Notification area -->
+    <div id="notifications"></div>
+
+    <script src="/static/dashboard.js"></script>
+</body>
+</html>
